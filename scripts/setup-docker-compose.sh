@@ -29,12 +29,73 @@ CONFIG_BASE_DIR="$REPO_ROOT/config/$CONFIG_NAME"
 
 # Check if directory already exists
 if [[ -d "$CONFIG_BASE_DIR" ]]; then
-  echo -e "${RED}Error: Config directory already exists: $CONFIG_BASE_DIR${NC}"
-  read -p "Overwrite existing .env? (y/N): " OVERWRITE
-  if [[ ! "$OVERWRITE" =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 1
-  fi
+  echo -e "${BLUE}Config directory already exists: $CONFIG_BASE_DIR${NC}"
+  echo
+  echo "What would you like to do?"
+  echo "  1) Update existing config (re-enter tokens, keep directory structure)"
+  echo "  2) Override config (delete and recreate from scratch)"
+  echo "  3) Pair Telegram device only"
+  echo
+  read -p "Choose an option [1/2/3]: " CONFIG_ACTION
+
+  case "$CONFIG_ACTION" in
+    1)
+      echo
+      echo -e "${BLUE}Updating existing config...${NC}"
+      # Fall through to the config prompts below
+      ;;
+    2)
+      echo
+      echo -e "${RED}This will delete all existing config in $CONFIG_BASE_DIR${NC}"
+      read -p "Are you sure? [y/N]: " CONFIRM_OVERRIDE
+      if [[ "$CONFIRM_OVERRIDE" != "y" && "$CONFIRM_OVERRIDE" != "Y" ]]; then
+        echo "Aborted."
+        exit 0
+      fi
+      echo -e "${BLUE}Removing existing config...${NC}"
+      rm -rf "$CONFIG_BASE_DIR"
+      echo -e "${GREEN}✓${NC} Removed $CONFIG_BASE_DIR"
+      echo
+      # Create fresh directory structure
+      echo -e "${BLUE}Creating directories...${NC}"
+      mkdir -p "$CONFIG_BASE_DIR/config"
+      mkdir -p "$CONFIG_BASE_DIR/workspace"
+      echo -e "${GREEN}✓${NC} Created $CONFIG_BASE_DIR/config/"
+      echo -e "${GREEN}✓${NC} Created $CONFIG_BASE_DIR/workspace/"
+      echo
+      ;;
+    3)
+      echo
+      ENV_FILE="$CONFIG_BASE_DIR/.env"
+      DOCKER_PROJECT="openclaw-$CONFIG_NAME"
+      DOCKER_CMD="docker compose --env-file $ENV_FILE -p $DOCKER_PROJECT exec"
+
+      echo -e "${BLUE}Approve Telegram device pairing:${NC}"
+      echo "Send /start to your Telegram bot to get a pairing code."
+      read -p "Enter the pairing code: " PAIRING_CODE
+
+      if [[ -z "$PAIRING_CODE" ]]; then
+        echo -e "${RED}Error: Pairing code cannot be empty${NC}"
+        exit 1
+      fi
+
+      echo "Approving Telegram pairing..."
+      if $DOCKER_CMD openclaw-gateway node dist/index.js pairing approve telegram "$PAIRING_CODE"; then
+        echo -e "${GREEN}✓${NC} Telegram bot paired successfully!"
+      else
+        echo -e "${RED}Error: Failed to approve Telegram pairing${NC}"
+        exit 1
+      fi
+
+      echo
+      echo -e "${GREEN}Done!${NC}"
+      exit 0
+      ;;
+    *)
+      echo -e "${RED}Invalid option. Please choose 1, 2, or 3.${NC}"
+      exit 1
+      ;;
+  esac
 else
   # Create directory structure
   echo -e "${BLUE}Creating directories...${NC}"
